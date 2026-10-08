@@ -56,7 +56,6 @@ export const L = {
   keyPoints: { en: 'Key points', ml: 'പ്രധാന വസ്തുതകൾ' },
   caveat: { en: 'The caveat', ml: 'ശ്രദ്ധിക്കേണ്ടത്' },
   desk: { en: 'Data Desk', ml: 'ഡാറ്റ ഡെസ്ക്' },
-  checked: { en: 'Every number checked against the data', ml: 'എല്ലാ കണക്കുകളും ഡാറ്റയുമായി ഒത്തുനോക്കിയത്' },
   inShort: { en: 'In short', ml: 'ചുരുക്കത്തിൽ' },
   then: { en: 'Then', ml: 'അന്ന്' },
   now: { en: 'Now', ml: 'ഇന്ന്' },

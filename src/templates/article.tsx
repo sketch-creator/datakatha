@@ -37,7 +37,6 @@ function Byline({ p }: { p: TemplateProps }) {
       <strong style={{ color: p.theme.ink }}>{L.desk[p.lang]}</strong>
       <span>·</span>
       <span>{today()}</span>
-      <span style={{ marginLeft: 'auto', color: p.theme.accent }}>✓ {L.checked[p.lang]}</span>
     </div>
   )
 }

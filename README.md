@@ -1,4 +1,8 @@
-# Data Story Studio
+# Data Katha
+
+*Katha* (കഥ) means story in Malayalam.
+
+Live: https://datakatha.vercel.app
 
 Drop a spreadsheet, get fact-checked stories. The app finds the stories in a CSV
 (including ones people usually miss), writes them as articles and social carousels

@@ -38,7 +38,7 @@ export default function App() {
           <span className="grid size-8 place-items-center rounded-lg bg-brand/15 text-brand">
             <Newspaper className="size-4.5" />
           </span>
-          <span className="font-serif text-xl font-semibold tracking-tight">Data Story Studio</span>
+          <span className="font-serif text-xl font-semibold tracking-tight">Data Katha</span>
         </button>
         <nav className="ml-4 hidden items-center gap-1 md:flex">
           {STEPS.map((s, i) => (

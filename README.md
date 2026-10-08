@@ -18,6 +18,10 @@ using answers prepared earlier from the same file (shown as "Sample run").
 To run it on your own file with live AI, open **Settings** and either paste your own
 free Gemini key (it stays in your browser) or enter the demo passcode if you have one.
 
+On the last step (Make it) every story exports in English or Malayalam as a PDF
+(A4 article, or one carousel slide per page), an editable Word file, PNG slides, an HTML
+page, or text for your CMS. Export stays locked if the fact-check fails.
+
 ## Files to try
 
 Download one, then drop it on the app's first screen. The same list is under

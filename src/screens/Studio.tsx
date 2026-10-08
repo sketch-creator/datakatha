@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ClipboardCopy, Download, FileCode2, Images, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, ClipboardCopy, Download, FileCode2, FileText, FileType2, Images, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
 import { storyById, writeStory } from '@/llm/pipeline'
 import { setState, useStore, type Format, type ViewLang } from '@/state/store'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,9 @@ import { ARTICLE_TEMPLATES } from '@/templates/article'
 import { CAROUSEL_TEMPLATES, slidesFor } from '@/templates/carousel'
 import { getTheme, THEMES } from '@/templates/themes'
 import { articleHtml, articleText, canExport, slug, zipSlides } from '@/lib/export'
+import { articlePdf, chartPng, slidesPdf, storyDocx } from '@/lib/documents'
+import { Chart } from '@/components/Chart'
+import { fonts, invertGlossary } from '@/templates/shared'
 import { useWidth } from './Board'
 import { cn } from '@/lib/utils'
 
@@ -25,7 +28,8 @@ export function Studio() {
   const [copied, setCopied] = useState(false)
   const exportRef = useRef<HTMLDivElement>(null)
   const articleRef = useRef<HTMLDivElement>(null)
-  const [exportLang, setExportLang] = useState<'en' | 'ml' | null>(null)
+  // What is being exported right now; it decides what is drawn off screen for capture.
+  const [job, setJob] = useState<{ lang: 'en' | 'ml'; kind: 'png' | 'pdf' | 'docx' } | null>(null)
   // "Export anyway" applies to the story it was ticked on only.
   const [anywayId, setAnywayId] = useState<string | null>(null)
   const anyway = anywayId === id
@@ -45,18 +49,43 @@ export function Studio() {
   const ok = (l: 'en' | 'ml') => canExport(gateOf(l), anyway)
   const failedLangs = (['en', 'ml'] as const).filter((l) => gateOf(l)?.verdict === 'FAIL')
 
-  async function exportPngs(l: 'en' | 'ml') {
-    setExportLang(l)
-    setExporting(`Rendering ${l === 'en' ? 'English' : 'Malayalam'} slides...`)
+  const LANG_NAME = { en: 'English', ml: 'Malayalam' } as const
+  const fileBase = () => run?.en?.headline ?? story!.title
+
+  async function runExport(l: 'en' | 'ml', kind: 'png' | 'pdf' | 'docx') {
+    const what = kind === 'docx' ? 'Word file' : kind === 'pdf' ? 'PDF' : 'slides'
+    setJob({ lang: l, kind })
+    setExporting(`Making the ${LANG_NAME[l]} ${what}...`)
     await new Promise((r) => setTimeout(r, 300))
-    const nodes = [...(exportRef.current?.querySelectorAll<HTMLElement>('[data-slide]') ?? [])].map((n) => n.firstElementChild?.firstElementChild?.firstElementChild as HTMLElement).filter(Boolean)
+    const root = exportRef.current
     try {
-      await zipSlides(nodes, `${slug(run?.en?.headline ?? story!.title)}-${l}-${view.template}`, (i) => setExporting(`Rendering slide ${i + 1} of ${nodes.length}...`))
+      if (kind === 'docx') {
+        const chartNode = root?.querySelector<HTMLElement>('[data-chart]')
+        await storyDocx({
+          content: contentOf(l)!,
+          lang: l,
+          source,
+          theme,
+          gate: gateOf(l),
+          chart: chartNode ? await chartPng(chartNode) : undefined,
+          slides: view.format === 'carousel' ? slidesFor(contentOf(l)!, view.template) : undefined,
+          fileBase: fileBase(),
+        })
+      } else if (view.format === 'article') {
+        const node = root?.querySelector<HTMLElement>('article') ?? (root?.firstElementChild as HTMLElement | null)
+        if (node) await articlePdf(node, contentOf(l)!.headline, fileBase(), l, theme.bg)
+      } else {
+        const nodes = [...(root?.querySelectorAll<HTMLElement>('[data-slide]') ?? [])].map((n) => n.firstElementChild?.firstElementChild?.firstElementChild as HTMLElement).filter(Boolean)
+        const base = `${slug(fileBase())}-${l}-${view.template}`
+        const progress = (i: number) => setExporting(`Rendering slide ${i + 1} of ${nodes.length}...`)
+        await (kind === 'pdf' ? slidesPdf(nodes, base, contentOf(l)!.headline, progress) : zipSlides(nodes, base, progress))
+      }
     } finally {
       setExporting('')
-      setExportLang(null)
+      setJob(null)
     }
   }
+  const can = (l: 'en' | 'ml') => Boolean(contentOf(l)) && ok(l) && !exporting
 
   return (
     <div className="flex h-full min-h-0">
@@ -120,15 +149,12 @@ export function Studio() {
         <div className="space-y-2">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Export</div>
           {view.format === 'carousel' ? (
-            <>
-              <Button variant="outline" size="sm" className="w-full justify-start" disabled={!run?.en || !ok('en') || !!exporting} onClick={() => exportPngs('en')}><Images /> PNG slides · English</Button>
-              <Button variant="outline" size="sm" className="w-full justify-start" disabled={!run?.ml || !ok('ml') || !!exporting} onClick={() => exportPngs('ml')}><Images /> PNG slides · മലയാളം</Button>
-            </>
+            <ExportRow icon={<Images />} label="PNG slides" can={can} onPick={(l) => runExport(l, 'png')} />
           ) : (
-            <>
-              <Button variant="outline" size="sm" className="w-full justify-start" disabled={!ready || !ok(langs[0])} onClick={() => { const n = articleRef.current?.querySelector('article'); if (n) articleHtml(n, run?.en?.headline ?? 'article', langs[0]) }}><FileCode2 /> HTML page ({langs[0] === 'en' ? 'EN' : 'ML'})</Button>
-            </>
+            <Button variant="outline" size="sm" className="w-full justify-start" disabled={!ready || !ok(langs[0])} onClick={() => { const n = articleRef.current?.querySelector('article'); if (n) articleHtml(n, run?.en?.headline ?? 'article', langs[0]) }}><FileCode2 /> HTML page ({langs[0] === 'en' ? 'EN' : 'ML'})</Button>
           )}
+          <ExportRow icon={<FileType2 />} label={view.format === 'carousel' ? 'PDF (one slide a page)' : 'PDF (A4)'} can={can} onPick={(l) => runExport(l, 'pdf')} />
+          <ExportRow icon={<FileText />} label="Word (editable)" can={can} onPick={(l) => runExport(l, 'docx')} />
           <Button
             variant="outline"
             size="sm"
@@ -203,16 +229,38 @@ export function Studio() {
         </div>
       </div>
 
-      {/* Full-size slides for PNG export, off screen */}
-      {exportLang && run && contentOf(exportLang) && (
+      {/* Full-size versions for export, drawn off screen while an export runs */}
+      {job && run && contentOf(job.lang) && (
         <div ref={exportRef} style={{ position: 'fixed', left: -20000, top: 0 }} aria-hidden>
-          {slidesFor(contentOf(exportLang)!, view.template).map((_, i, arr) => (
-            <div key={i} data-slide>
-              <Slide story={story} content={contentOf(exportLang)!} lang={exportLang} theme={theme} template={view.template} index={i} total={arr.length} source={source} glossary={run.ml?.glossary} scale={1} />
+          {job.kind === 'docx' ? (
+            <div data-chart style={{ width: 760, padding: 16, background: theme.bg, boxSizing: 'border-box' }}>
+              <Chart spec={story.chart} theme={theme} width={728} height={410} names={job.lang === 'ml' ? invertGlossary(run.ml?.glossary) : undefined} fontFamily={fonts.sans(job.lang)} />
             </div>
-          ))}
+          ) : view.format === 'article' ? (
+            <ArticleView story={story} content={contentOf(job.lang)!} lang={job.lang} theme={theme} template={view.template} width={760} source={source} glossary={run.ml?.glossary} />
+          ) : (
+            slidesFor(contentOf(job.lang)!, view.template).map((_, i, arr) => (
+              <div key={i} data-slide>
+                <Slide story={story} content={contentOf(job.lang)!} lang={job.lang} theme={theme} template={view.template} index={i} total={arr.length} source={source} glossary={run.ml?.glossary} scale={1} />
+              </div>
+            ))
+          )}
         </div>
       )}
+    </div>
+  )
+}
+
+function ExportRow({ icon, label, can, onPick }: { icon: React.ReactNode; label: string; can: (l: 'en' | 'ml') => boolean; onPick: (l: 'en' | 'ml') => void }) {
+  return (
+    <div className="rounded-md border p-2">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium [&_svg]:size-3.5">
+        {icon} {label}
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        <Button variant="outline" size="sm" className="h-7 text-xs" disabled={!can('en')} onClick={() => onPick('en')}>English</Button>
+        <Button variant="outline" size="sm" className="h-7 text-xs" disabled={!can('ml')} onClick={() => onPick('ml')}>മലയാളം</Button>
+      </div>
     </div>
   )
 }
